@@ -111,48 +111,79 @@ export async function extractDominantColorsFromImage(
         ctx.drawImage(img, 0, 0, size, size);
 
         const imageData = ctx.getImageData(0, 0, size, size).data;
-        const colorBuckets: Record<string, { r: number; g: number; b: number; count: number }> = {};
+        const colorBuckets = new Map<string, { r: number; g: number; b: number; count: number }>();
 
-        for (let i = 0; i < imageData.length; i += 16) {
+        const step = 4 * 2;
+        for (let i = 0; i < imageData.length; i += step) {
           const r = imageData[i];
           const g = imageData[i + 1];
           const b = imageData[i + 2];
           const a = imageData[i + 3];
 
           if (a < 128) continue;
+          const [h, s, l] = rgbToHsl(r, g, b);
+          if (l < 5 || l > 95) continue;
 
-          const quantizedR = Math.round(r / 32) * 32;
-          const quantizedG = Math.round(g / 32) * 32;
-          const quantizedB = Math.round(b / 32) * 32;
-          const key = `${quantizedR},${quantizedG},${quantizedB}`;
+          const bucketR = Math.round(r / 24) * 24;
+          const bucketG = Math.round(g / 24) * 24;
+          const bucketB = Math.round(b / 24) * 24;
+          const key = `${bucketR},${bucketG},${bucketB}`;
 
-          if (!colorBuckets[key]) {
-            colorBuckets[key] = { r, g, b, count: 0 };
+          const existing = colorBuckets.get(key);
+          if (existing) {
+            existing.count++;
+          } else {
+            colorBuckets.set(key, { r: bucketR, g: bucketG, b: bucketB, count: 1 });
           }
-          colorBuckets[key].count++;
         }
 
-        const sorted = Object.values(colorBuckets)
-          .sort((a, b) => b.count - a.count)
-          .slice(0, maxColors);
+        const sorted = Array.from(colorBuckets.values())
+          .map((item) => {
+            const [h, s, l] = rgbToHsl(item.r, item.g, item.b);
+            const chromaBonus = 1 + (s / 100) * 1.5;
+            return {
+              r: item.r,
+              g: item.g,
+              b: item.b,
+              hsl: [h, s, l] as [number, number, number],
+              hex: hslToHex(h, s, l),
+              count: item.count,
+              score: item.count * chromaBonus,
+            };
+          })
+          .sort((a, b) => b.score - a.score);
 
-        const result: ExtractedColor[] = sorted.map((b) => {
-          const hsl = rgbToHsl(b.r, b.g, b.b);
-          return {
-            hex: hslToHex(hsl[0], hsl[1], hsl[2]),
-            hsl,
-            rgb: [b.r, b.g, b.b],
-            population: b.count,
-          };
-        });
+        const uniqueColors: ExtractedColor[] = [];
+        for (const item of sorted) {
+          const isTooClose = uniqueColors.some((uc) => {
+            const hueDiff = Math.abs(uc.hsl[0] - item.hsl[0]);
+            const satDiff = Math.abs(uc.hsl[1] - item.hsl[1]);
+            const lightDiff = Math.abs(uc.hsl[2] - item.hsl[2]);
+            return (hueDiff < 25 || hueDiff > 335) && satDiff < 25 && lightDiff < 25;
+          });
 
-        resolve(result);
-      } catch {
+          if (!isTooClose) {
+            uniqueColors.push({
+              hex: item.hex,
+              hsl: item.hsl,
+              rgb: [item.r, item.g, item.b],
+              population: item.count,
+            });
+          }
+
+          if (uniqueColors.length >= maxColors) break;
+        }
+
+        resolve(uniqueColors);
+      } catch (err) {
+        console.error('Failed to extract colors from image canvas:', err);
         resolve([]);
       }
     };
 
-    img.onerror = () => resolve([]);
+    img.onerror = () => {
+      resolve([]);
+    };
 
     if (typeof imageSource === 'string') {
       img.src = imageSource;
@@ -163,123 +194,141 @@ export async function extractDominantColorsFromImage(
 }
 
 export function generateMaterialYouPalettes(seedHex: string): DynamicPaletteOption[] {
-  const rgb = hexToRgb(seedHex);
-  const [h, s] = rgbToHsl(rgb[0], rgb[1], rgb[2]);
+  const [r, g, b] = hexToRgb(seedHex);
+  const [h, s] = rgbToHsl(r, g, b);
 
-  const tonalTonal: DynamicPaletteOption = {
+  const tonalSpot: DynamicPaletteOption = {
     id: 'tonal-spot',
-    name: 'Tonal Spot',
-    nameAr: 'التناغم النغمي',
-    description: 'Calm, balanced Google Pixel default aesthetic with natural harmony',
-    descriptionAr: 'المظهر الافتراضي لهواتف بكسل مع تباين متوازن وألوان هادئة',
+    name: 'Tonal Spot (Balanced)',
+    nameAr: 'نغمي متوازن (Material Standard)',
+    description: 'Crisp, harmonious Material 3 tones with optimal OLED contrast.',
+    descriptionAr: 'تدرجات نغمية متناسقة ومريحة للعين مع تباين فائق لشاشات OLED.',
     seedHex,
     colors: {
-      primary: hslToHex(h, Math.min(s, 75), 65),
-      secondary: hslToHex(h, Math.max(15, s - 30), 78),
-      tertiary: hslToHex((h + 60) % 360, Math.min(65, s), 72),
-      background: hslToHex(h, Math.max(8, s - 40), 6),
-      dialBg: hslToHex(h, Math.max(10, s - 35), 11),
-      hands: hslToHex(h, Math.min(s + 10, 85), 60),
-      accent: hslToHex((h + 45) % 360, 85, 68),
-      complicationGlow: hslToHex(h, 80, 55),
+      primary: hslToHex(h, Math.min(85, s + 10), 78),
+      secondary: hslToHex((h + 15) % 360, Math.max(25, s - 25), 65),
+      tertiary: hslToHex((h + 60) % 360, Math.min(75, s), 72),
+      background: hslToHex(h, Math.min(15, s * 0.15), 6),
+      dialBg: hslToHex(h, Math.min(20, s * 0.2), 11),
+      hands: '#FFFFFF',
+      accent: hslToHex((h + 180) % 360, Math.min(95, s + 20), 75),
+      complicationGlow: hslToHex(h, s, 75) + '33',
     },
   };
 
-  const expressive: DynamicPaletteOption = {
-    id: 'expressive',
-    name: 'Expressive',
-    nameAr: 'تعبيري حيوي',
-    description: 'Vibrant tertiary complementary contrasts for energetic watch faces',
-    descriptionAr: 'تباينات لونية غنية ومليئة بالحيوية للأنشطة والرياضة',
+  const vibrantExpressive: DynamicPaletteOption = {
+    id: 'vibrant-expressive',
+    name: 'Expressive Vibrant',
+    nameAr: 'تعبيري حيوي (High Chroma)',
+    description: 'High-energy, punchy Material You colors inspired by Pixel 8/9 active faces.',
+    descriptionAr: 'ألوان مشبعة ومرحة مستوحاة من أحدث واجهات جوجل بكسل الرياضية.',
     seedHex,
     colors: {
-      primary: hslToHex(h, 90, 62),
-      secondary: hslToHex((h + 120) % 360, 80, 70),
-      tertiary: hslToHex((h + 240) % 360, 85, 75),
-      background: hslToHex(h, 20, 5),
-      dialBg: hslToHex(h, 25, 9),
-      hands: hslToHex((h + 120) % 360, 95, 65),
-      accent: hslToHex(h, 95, 60),
-      complicationGlow: hslToHex((h + 120) % 360, 90, 60),
+      primary: hslToHex(h, 92, 74),
+      secondary: hslToHex((h + 35) % 360, 80, 68),
+      tertiary: hslToHex((h + 120) % 360, 85, 75),
+      background: hslToHex(h, 25, 7),
+      dialBg: hslToHex(h, 30, 13),
+      hands: hslToHex((h + 10) % 360, 95, 92),
+      accent: hslToHex((h + 200) % 360, 100, 72),
+      complicationGlow: hslToHex(h, 90, 70) + '44',
     },
   };
 
-  const neutral: DynamicPaletteOption = {
-    id: 'neutral',
-    name: 'Neutral Luxe',
-    nameAr: 'محايد فاخر',
-    description: 'Subtle desaturated tones ideal for high-contrast OLED battery saving',
-    descriptionAr: 'نغمات محايدة فاخرة لتوفير طاقة شاشات OLED بأعلى درجات الوضوح',
+  const pastelGlow: DynamicPaletteOption = {
+    id: 'pastel-glow',
+    name: 'Pastel Luminous',
+    nameAr: 'باستيل ناعم (Soft Pastel)',
+    description: 'Gentle pastel hues with soothing tone curve and high readability.',
+    descriptionAr: 'تدرجات باستيلية هادئة ناعمة ذات مظهر عصري وأنيق.',
     seedHex,
     colors: {
-      primary: hslToHex(h, 22, 75),
-      secondary: hslToHex(h, 12, 60),
-      tertiary: hslToHex(h, 15, 85),
-      background: '#080808',
-      dialBg: '#121212',
-      hands: '#E8EAED',
-      accent: hslToHex(h, 45, 70),
-      complicationGlow: '#9AA0A6',
+      primary: hslToHex(h, 60, 82),
+      secondary: hslToHex((h + 40) % 360, 45, 78),
+      tertiary: hslToHex((h + 90) % 360, 50, 80),
+      background: hslToHex(h, 12, 8),
+      dialBg: hslToHex(h, 18, 14),
+      hands: '#FAFAFA',
+      accent: hslToHex((h + 150) % 360, 70, 80),
+      complicationGlow: hslToHex(h, 50, 80) + '30',
     },
   };
 
-  const rainbowVibrant: DynamicPaletteOption = {
-    id: 'rainbow',
-    name: 'Vibrant Pop',
-    nameAr: 'ألوان ساطعة',
-    description: 'High saturation hues that stand out in direct outdoor sunlight',
-    descriptionAr: 'ألوان عالية التشبع تبرز بوضوح حتى تحت أشعة الشمس المباشرة',
+  const midnightMinimal: DynamicPaletteOption = {
+    id: 'midnight-minimal',
+    name: 'Midnight Monochromatic',
+    nameAr: 'منتصف الليل الأحادي (OLED Pure)',
+    description: 'Pure black canvas with subtle tonal accents for maximum battery savings.',
+    descriptionAr: 'خلفية سوداء نقية مع لمسات ملونة طفيفة لتوفير أقصى قدر من البطارية.',
     seedHex,
     colors: {
-      primary: hslToHex(h, 95, 58),
-      secondary: hslToHex((h + 180) % 360, 90, 65),
-      tertiary: hslToHex((h + 90) % 360, 85, 68),
-      background: '#040508',
-      dialBg: '#0B0D13',
-      hands: hslToHex(h, 100, 62),
-      accent: hslToHex((h + 180) % 360, 95, 62),
-      complicationGlow: hslToHex(h, 90, 60),
+      primary: hslToHex(h, Math.min(60, s), 80),
+      secondary: hslToHex(h, 20, 55),
+      tertiary: hslToHex((h + 20) % 360, 30, 65),
+      background: '#000000',
+      dialBg: '#080808',
+      hands: '#E6E6E6',
+      accent: hslToHex(h, 85, 75),
+      complicationGlow: hslToHex(h, 60, 70) + '22',
     },
   };
 
-  return [tonalTonal, expressive, neutral, rainbowVibrant];
+  return [tonalSpot, vibrantExpressive, pastelGlow, midnightMinimal];
 }
 
-export const PRESET_WALLPAPERS: PresetWallpaper[] = [
+export const CURATED_WALLPAPERS: PresetWallpaper[] = [
   {
-    id: 'feather-mint',
-    name: 'Pixel Botanic Mint',
-    nameAr: 'نعناع بكسل النباتي',
-    category: 'Botanical',
-    url: 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=600&auto=format&fit=crop&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?w=150&auto=format&fit=crop&q=80',
-    previewSeed: '#34D399',
+    id: 'cosmic-nebula',
+    name: 'Cosmic Nebula',
+    nameAr: 'سديم كوني كوزموس',
+    category: 'Astronomy',
+    url: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=600&auto=format&fit=crop&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=150&auto=format&fit=crop&q=70',
+    previewSeed: '#9B51E0',
   },
   {
-    id: 'sunset-amber',
-    name: 'Desert Horizon Amber',
-    nameAr: 'أفق الصحراء العنبري',
-    category: 'Landscape',
+    id: 'desert-sunset',
+    name: 'Desert Dunes Sunset',
+    nameAr: 'غروب الصحراء والكثبان',
+    category: 'Nature',
     url: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=600&auto=format&fit=crop&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=150&auto=format&fit=crop&q=80',
-    previewSeed: '#F59E0B',
+    thumbnail: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?w=150&auto=format&fit=crop&q=70',
+    previewSeed: '#FF8A65',
   },
   {
-    id: 'deep-ocean',
-    name: 'Pacific Cobalt Blue',
-    nameAr: 'أزرق كوبالت المحيط',
-    category: 'Minimal',
-    url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&auto=format&fit=crop&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=150&auto=format&fit=crop&q=80',
-    previewSeed: '#38BDF8',
+    id: 'emerald-forest',
+    name: 'Emerald Pine Mist',
+    nameAr: 'غابة الزمرد والضباب',
+    category: 'Nature',
+    url: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=600&auto=format&fit=crop&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=150&auto=format&fit=crop&q=70',
+    previewSeed: '#34A853',
   },
   {
-    id: 'lavender-mist',
-    name: 'Orchid Twilight',
-    nameAr: 'غسق الأوركيد البنفسجي',
+    id: 'ocean-coral',
+    name: 'Azure Ocean & Coral',
+    nameAr: 'المحيط الأزرق والشعب',
+    category: 'Ocean',
+    url: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=600&auto=format&fit=crop&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?w=150&auto=format&fit=crop&q=70',
+    previewSeed: '#00BCD4',
+  },
+  {
+    id: 'material-geometry',
+    name: 'Material Shapes 3D',
+    nameAr: 'أشكال ماتيريال هندسية',
     category: 'Abstract',
-    url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80',
-    thumbnail: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=150&auto=format&fit=crop&q=80',
-    previewSeed: '#C084FC',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=70',
+    previewSeed: '#A8C7FA',
+  },
+  {
+    id: 'cherry-blossom',
+    name: 'Sakura Floral Glow',
+    nameAr: 'أزهار الكرز والساكورا',
+    category: 'Floral',
+    url: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=600&auto=format&fit=crop&q=80',
+    thumbnail: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=150&auto=format&fit=crop&q=70',
+    previewSeed: '#F48FB1',
   },
 ];
