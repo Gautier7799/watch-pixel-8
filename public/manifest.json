@@ -1,0 +1,27 @@
+{
+  "name": "Watch Pixel 8 Studio",
+  "short_name": "PixelWatch",
+  "description": "Smart Watch Face Studio and Store with Material You & Wear OS support",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B0E14",
+  "theme_color": "#0B0E14",
+  "orientation": "portrait-primary",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["personalization", "utilities"],
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=192&auto=format&fit=crop&q=80",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=512&auto=format&fit=crop&q=80",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
