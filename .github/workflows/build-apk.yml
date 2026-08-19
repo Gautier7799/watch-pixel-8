@@ -1,34 +1,54 @@
-name: Build and Release APK
+name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
-      - name: Install Dependencies
-        run: npm install --legacy-peer-deps
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-      - name: Build Web App
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Dependencies & Capacitor
+        run: |
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
+
+      - name: Build Web Dist
         run: npx vite build
 
-      - name: Upload Web Dist Artifact
+      - name: Initialize Capacitor Android
+        run: |
+          npx cap init "Watch Pixel 8" "com.gaidiamjed.watchpixel8" --web-dir dist
+          npx cap add android
+          npx cap sync android
+
+      - name: Build Debug APK with Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: web-dist
-          path: dist/
+          name: WatchPixel8-Android-App-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
