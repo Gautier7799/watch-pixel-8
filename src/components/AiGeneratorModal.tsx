@@ -5,10 +5,16 @@ import {
   Sparkles,
   X,
   RefreshCw,
+  Zap,
+  Palette,
+  Send,
   Check,
+  ArrowRight,
+  ArrowLeft,
+  Flame,
 } from 'lucide-react';
 import { playClickSound, playSyncSuccessChime } from '../utils/audio';
-import confetti from 'canvas-confetti';
+import { fireCelebrationConfetti } from '../utils/confetti';
 
 interface AiGeneratorModalProps {
   isOpen: boolean;
@@ -139,11 +145,7 @@ export const AiGeneratorModal: React.FC<AiGeneratorModalProps> = ({
 
         setGeneratedFace(completeFace);
         playSyncSuccessChime();
-        confetti({
-          particleCount: 50,
-          spread: 60,
-          origin: { y: 0.6 },
-        });
+        fireCelebrationConfetti();
       } else {
         setErrorMsg(isAr ? 'تعذر توليد التصميم، يرجى المحاولة ثانية.' : 'Failed to generate design.');
       }
@@ -180,14 +182,14 @@ export const AiGeneratorModal: React.FC<AiGeneratorModalProps> = ({
                 {isAr ? 'مولّد خلفيات Pixel بالذكاء الاصطناعي' : 'Gemini AI Watch Face Architect'}
               </h3>
               <p className="text-xs text-neutral-400">
-                {isAr ? 'صمم وجه ساعة مخصص بالكامل في ثوانٍ عبر نماذج Gemini' : 'Generate custom Material 3 WFF watch faces with Gemini'}
+                {isAr ? 'صمم وجه ساعة مخصص بالكامل في ثوانٍ عبر نماذج Gemini' : 'Generate custom Material 3 WFF watch faces in seconds with Gemini'}
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center text-neutral-400 hover:text-white transition-colors"
+            className="w-8 h-8 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
           >
             <X size={16} />
           </button>
@@ -204,8 +206,8 @@ export const AiGeneratorModal: React.FC<AiGeneratorModalProps> = ({
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={
                   isAr
-                    ? 'مثال: خلفية فلكية بألوان كوزموس بنفسجية متدرجة، مع أرقام واضحة وعقارب بيضاوية بيضاء ومؤشرات بطارية وخطوات...'
-                    : 'e.g., Cyberpunk tachymeter with neon cyan dials, high contrast OLED dark canvas, and Fitbit activity rings...'
+                    ? 'مثال: خلفية فلكية بألوان كوزموس بنفسجية متدرجة...'
+                    : 'e.g., Cyberpunk tachymeter with neon cyan/magenta dials...'
                 }
                 rows={3}
                 className="w-full bg-neutral-950 border border-neutral-800 focus:border-sky-500 rounded-2xl p-3 text-xs text-neutral-100 placeholder-neutral-500 outline-none transition-all resize-none"
@@ -224,7 +226,7 @@ export const AiGeneratorModal: React.FC<AiGeneratorModalProps> = ({
                       playClickSound();
                       setPrompt(preset.prompt);
                     }}
-                    className="px-2.5 py-1 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-[11px] rounded-xl text-neutral-300 transition-all text-left truncate max-w-full"
+                    className="px-2.5 py-1 bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-[11px] rounded-xl text-neutral-300 transition-all text-left truncate max-w-full cursor-pointer"
                   >
                     ✨ {preset.label}
                   </button>
@@ -245,7 +247,7 @@ export const AiGeneratorModal: React.FC<AiGeneratorModalProps> = ({
                   <button
                     key={s.id}
                     onClick={() => setSelectedStyle(s.id)}
-                    className={`py-1.5 px-2 rounded-xl text-xs font-medium transition-all ${
+                    className={`py-1.5 px-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
                       selectedStyle === s.id
                         ? 'bg-sky-500 text-white font-bold'
                         : 'bg-neutral-950 text-neutral-400 hover:bg-neutral-800'
@@ -309,7 +311,7 @@ export const AiGeneratorModal: React.FC<AiGeneratorModalProps> = ({
 
                 <button
                   onClick={handleApply}
-                  className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition-all shadow-md"
+                  className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition-all shadow-md cursor-pointer"
                 >
                   <Check size={14} />
                   <span>{isAr ? 'اعتماد ونقل للمحرر والمحاكي' : 'Apply to Studio & Watch'}</span>
