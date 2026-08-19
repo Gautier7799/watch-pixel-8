@@ -33,7 +33,7 @@ jobs:
           npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
 
       - name: Build Web App
-        run: npm run build
+        run: npx vite build
 
       - name: Initialize Capacitor Android Project
         run: |
