@@ -16,8 +16,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4
@@ -30,8 +29,8 @@ jobs:
 
       - name: Install Dependencies & Capacitor
         run: |
-          npm ci
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install --legacy-peer-deps
+          npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
 
       - name: Build Web App
         run: npm run build
